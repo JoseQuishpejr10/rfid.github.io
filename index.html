@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RFID Console - Chainway URA4</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+  <div class="app-layout">
+    
+    <!-- Sidebar Izquierdo Oscuro -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo"><i class="fa-solid fa-tower-broadcast"></i></div>
+        <span>URA4 RFID</span>
+      </div>
+      
+      <ul class="sidebar-menu">
+        <li class="menu-item active" onclick="cambiarVista('inventory', this)">
+          <i class="fa-solid fa-boxes-stacked"></i>
+          <span>Inventory</span>
+        </li>
+        <li class="menu-item" onclick="cambiarVista('historial', this)">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>Historial / Guardados</span>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div id="badge-estado" class="status-badge status-active">
+          <span class="status-dot" id="dot-estado"></span>
+          <span id="txt-estado">Activo</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="main-content">
+      
+      <!-- VISTA 1: INVENTORY -->
+      <section id="view-inventory" class="view-section active">
+        <header class="content-header">
+          <div class="header-title">
+            <h1>Inventario en Vivo - Chainway URA4</h1>
+            <p>Monitoreo automático de 4 puertos (Antena 4 = Salida / Facturación)</p>
+          </div>
+          <div class="header-actions">
+            <!-- Botones dinámicos Iniciar / Pausar / Detener -->
+            <button id="btn-iniciar" class="btn btn-success" onclick="cambiarEstado('iniciar')">
+              <i class="fa-solid fa-play" id="icon-iniciar"></i> <span id="txt-iniciar">Iniciar</span>
+            </button>
+            <button id="btn-pausar" class="btn" onclick="cambiarEstado('pausar')" style="background-color: var(--warning); color: white;">
+              <i class="fa-solid fa-pause" id="icon-pausar"></i> <span id="txt-pausar">Pausar</span>
+            </button>
+            <button id="btn-detener" class="btn btn-danger" onclick="cambiarEstado('detener')">
+              <i class="fa-solid fa-stop"></i> Detener
+            </button>
+
+            <div class="separator"></div>
+
+            <button class="btn btn-primary" onclick="guardarSesionActual()">
+              <i class="fa-solid fa-floppy-disk"></i> Guardar Sesión
+            </button>
+            <button class="btn btn-success" onclick="generarReporte()">
+              <i class="fa-solid fa-chart-pie"></i> Reporte General
+            </button>
+            <button class="btn btn-secondary" onclick="limpiarTabla()">
+              <i class="fa-solid fa-trash-can"></i> Limpiar
+            </button>
+          </div>
+        </header>
+
+        <!-- Panel de Control de Antenas/Puertos Chainway URA4 -->
+        <div class="panel" style="margin-bottom: 1.5rem; padding: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem;">
+            <h3 style="font-weight: 800; font-size: 1rem; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem;">
+              <i class="fa-solid fa-microchip" style="color: var(--primary);"></i> Control de Puertos SMA - Chainway URA4
+            </h3>
+            <span class="channel-badge" style="background: #e0e7ff; color: #3730a3;">4 Puertos SMA Detectados</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div class="metric-card" style="padding: 0.85rem 1rem; justify-content: space-between;">
+              <div>
+                <strong>Puerto 1</strong>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Entrada / Stock</div>
+              </div>
+              <input type="checkbox" checked onchange="togglePuerto('puerto_1', this.checked)">
+            </div>
+
+            <div class="metric-card" style="padding: 0.85rem 1rem; justify-content: space-between;">
+              <div>
+                <strong>Puerto 2</strong>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Entrada / Stock</div>
+              </div>
+              <input type="checkbox" checked onchange="togglePuerto('puerto_2', this.checked)">
+            </div>
+
+            <div class="metric-card" style="padding: 0.85rem 1rem; justify-content: space-between;">
+              <div>
+                <strong>Puerto 3</strong>
+                <div style="font-size: 0.75rem; color: var(--text-muted);">Entrada / Stock</div>
+              </div>
+              <input type="checkbox" checked onchange="togglePuerto('puerto_3', this.checked)">
+            </div>
+
+            <div class="metric-card" style="padding: 0.85rem 1rem; justify-content: space-between; border: 2px solid var(--danger);">
+              <div>
+                <strong style="color: var(--danger);">Puerto 4</strong>
+                <div style="font-size: 0.75rem; color: var(--danger); font-weight: 700;">Salida Automática</div>
+              </div>
+              <input type="checkbox" checked onchange="togglePuerto('puerto_4', this.checked)">
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-icon primary"><i class="fa-solid fa-box"></i></div>
+            <div>
+              <div class="title">Etiquetas Únicas</div>
+              <div class="value" id="metric-unique">0</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon info"><i class="fa-solid fa-wave-square"></i></div>
+            <div>
+              <div class="title">Total Lecturas Hechas</div>
+              <div class="value" id="metric-total-lecturas">0</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon warning"><i class="fa-solid fa-rotate"></i></div>
+            <div>
+              <div class="title">Veces Repetidas</div>
+              <div class="value" id="metric-repetidas">0</div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon success"><i class="fa-solid fa-clock"></i></div>
+            <div>
+              <div class="title">Última Detección</div>
+              <div class="value" id="metric-last-time" style="font-size: 1.25rem;">--:--:--</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="table-responsive" style="position: relative; overflow: visible;">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 70px;">INDEX</th>
+                  <th style="width: 130px; cursor: pointer;" onclick="toggleMenuFiltro(event, 'hora', 'principal')">HORA <i class="fa-solid fa-filter filter-icon"></i></th>
+                  <th style="width: 160px;">DISPOSITIVO / IP</th>
+                  <th style="width: 110px; cursor: pointer;" onclick="toggleMenuFiltro(event, 'canal', 'principal')">CANAL <i class="fa-solid fa-filter filter-icon"></i></th>
+                  <th style="cursor: pointer;" onclick="toggleMenuFiltro(event, 'contenido', 'principal')">CONTENIDO / CARGA EPC (NOMBRE) <i class="fa-solid fa-filter filter-icon"></i></th>
+                  <th style="width: 180px; text-align: center;">ESTADO DE STOCK</th>
+                  <th style="width: 130px; text-align: center; cursor: pointer;" onclick="toggleMenuFiltro(event, 'repeticiones', 'principal')">REPETIDAS <i class="fa-solid fa-filter filter-icon"></i></th>
+                </tr>
+              </thead>
+              <tbody id="tabla-lecturas">
+                <tr>
+                  <td colspan="7">
+                    <div class="empty-state">
+                      <i class="fa-solid fa-circle-notch fa-spin"></i>
+                      <p>Escuchando red local... Esperando transmisión del Chainway URA4.</p>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VISTA 2: HISTORIAL / GUARDADOS -->
+      <section id="view-historial" class="view-section">
+        <header class="content-header">
+          <div class="header-title">
+            <h1>Historial y Registros Guardados</h1>
+            <p>Sesiones almacenadas directamente en SQL Server con visualización y exportación</p>
+          </div>
+        </header>
+
+        <div class="panel">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 90px;">ID SESIÓN</th>
+                  <th style="width: 200px;">FECHA Y HORA</th>
+                  <th style="width: 140px; text-align: center;">ÚNICAS</th>
+                  <th style="width: 140px; text-align: center;">TOTAL LECTURAS</th>
+                  <th style="text-align: center;">ACCIONES (VER / EXPORTAR)</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-historial">
+                <tr>
+                  <td colspan="5">
+                    <div class="empty-state">
+                      <i class="fa-solid fa-folder-open"></i>
+                      <p>No hay sesiones guardadas todavía en la base de datos.</p>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Menú Flotante Tipo Excel -->
+  <div id="excel-filter-menu" class="excel-menu">
+    <div class="menu-header" id="menu-title">Opciones de Filtro</div>
+    <button class="menu-opt-btn" onclick="ejecutarOrden('asc')"><i class="fa-solid fa-arrow-up-wide-short"></i> Ordenar Ascendente</button>
+    <button class="menu-opt-btn" onclick="ejecutarOrden('desc')"><i class="fa-solid fa-arrow-down-wide-short"></i> Ordenar Descendente</button>
+    <div class="menu-search-box">
+      <div class="search-label">Filtrar texto específico:</div>
+      <input type="text" id="excel-search-input" onkeyup="ejecutarFiltroTexto()" placeholder="Escribe para buscar...">
+    </div>
+  </div>
+
+  <!-- Modal de Reporte General -->
+  <div class="modal-overlay" id="modal-reporte">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-clipboard-check" style="color: var(--primary);"></i> Resumen de Operación RFID</h3>
+        <button class="close-btn" onclick="cerrarReporte()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="report-item">
+          <span>Total de lecturas detectadas:</span>
+          <strong id="rep-total-lecturas">0</strong>
+        </div>
+        <div class="report-item">
+          <span>Etiquetas únicas en inventario:</span>
+          <strong id="rep-unicas" style="color: var(--primary);">0</strong>
+        </div>
+        <div class="report-item">
+          <span>Total de repeticiones registradas:</span>
+          <strong id="rep-repetidas" style="color: var(--warning);">0</strong>
+        </div>
+        
+        <div style="margin-top: 1.75rem;">
+          <button class="btn btn-dark" style="width: 100%; justify-content: center; padding: 0.85rem;" onclick="verDetalleAuditoria()">
+            <i class="fa-solid fa-list-check"></i> Ver Auditoría Consolidada
+          </button>
+        </div>
+      </div>
+      <button class="btn btn-secondary" style="width: 100%; justify-content: center;" onclick="cerrarReporte()">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Modal de Auditoría -->
+  <div class="modal-overlay" id="modal-repetidas-detalle">
+    <div class="modal-content wide-modal">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i> Auditoría Consolidada</h3>
+        <button class="close-btn" onclick="cerrarDetalleAuditoria()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto; position: relative; border-radius: 8px; border: 1px solid var(--border);">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 160px; cursor: pointer;" onclick="toggleMenuFiltro(event, 'hora', 'auditoria')">ÚLTIMA HORA <i class="fa-solid fa-filter filter-icon"></i></th>
+                <th style="width: 140px; cursor: pointer;" onclick="toggleMenuFiltro(event, 'canal', 'auditoria')">CANAL <i class="fa-solid fa-filter filter-icon"></i></th>
+                <th style="cursor: pointer;" onclick="toggleMenuFiltro(event, 'contenido', 'auditoria')">CONTENIDO / NOMBRE <i class="fa-solid fa-filter filter-icon"></i></th>
+                <th style="width: 160px; text-align: center; cursor: pointer;" onclick="toggleMenuFiltro(event, 'repeticiones', 'auditoria')">REPETIDAS <i class="fa-solid fa-filter filter-icon"></i></th>
+              </tr>
+            </thead>
+            <tbody id="tabla-repetidas-detalle"></tbody>
+          </table>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width: 100%; justify-content: center;" onclick="cerrarDetalleAuditoria()">Volver al Reporte</button>
+    </div>
+  </div>
+
+  <!-- Modal Vista Detallada de Sesión Histórica -->
+  <div class="modal-overlay" id="modal-ver-sesion">
+    <div class="modal-content wide-modal">
+      <div class="modal-header">
+        <h3 id="titulo-modal-sesion"><i class="fa-solid fa-eye" style="color: var(--primary);"></i> Detalle de Sesión Guardada</h3>
+        <button class="close-btn" onclick="cerrarModalSesion()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 1rem; font-weight: 700; color: var(--text-muted); font-size: 0.9rem;">Inventario Consolidado de la Sesión:</div>
+        <div class="table-responsive" style="max-height: 380px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--border);">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 80px;">INDEX</th>
+                <th style="width: 130px;">HORA</th>
+                <th style="width: 150px;">DISPOSITIVO</th>
+                <th style="width: 110px;">CANAL</th>
+                <th>CONTENIDO / EPC</th>
+                <th style="width: 130px; text-align: center;">REPETIDAS</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-sesion-detalle"></tbody>
+          </table>
+        </div>
+      </div>
+      <div style="display: flex; gap: 1rem;">
+        <button class="btn btn-success" style="flex: 1; justify-content: center;" onclick="exportarSesionDesdeModalExcel()">
+          <i class="fa-solid fa-file-excel"></i> Exportar a Excel
+        </button>
+        <button class="btn btn-danger" style="flex: 1; justify-content: center;" onclick="exportarSesionDesdeModalPDF()">
+          <i class="fa-solid fa-file-pdf"></i> Exportar a PDF
+        </button>
+        <button class="btn btn-secondary" style="flex: 0.5; justify-content: center;" onclick="cerrarModalSesion()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
